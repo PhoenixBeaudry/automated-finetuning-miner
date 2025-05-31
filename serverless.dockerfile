@@ -98,4 +98,4 @@ CMD echo 'Preparing logging...' && \
     huggingface-cli login --token "$HUGGINGFACE_TOKEN" --add-to-git-credential && \
     echo "Attempting to log in to W&B" && \
     wandb login "$WANDB_TOKEN" && \
-    python -u /workspace/configs/runpod_handler.py
+    python -u /workspace/runpod_handler.py
