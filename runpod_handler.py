@@ -27,14 +27,14 @@ def handler(job):
     print(f"Starting training job: {job_id}")
 
     # Set machine specific env vars
-    num_gpus = torch.cuda.device_count()
+    num_gpus = torch.cuda.device_count() or 1
     print(f"Found {num_gpus} GPUs")
     num_phys_cpus = psutil.cpu_count(logical=False)
-    num_omp_threads = int(num_phys_cpus/num_gpus)-4
+    num_omp_threads = max(1, int(num_phys_cpus / num_gpus) - 4)
 
     print(f"Found {num_phys_cpus} CPUs: setting OMP Threads to {num_omp_threads}")
 
-    os.environ['OMP_NUM_THREADS'] = str(num_omp_threads-4)
+    os.environ['OMP_NUM_THREADS'] = str(num_omp_threads)
     
     
     # Extract training parameters from the job input
