@@ -87,12 +87,10 @@ RUN mkdir -p /root/.aws && \
     echo "[default]\nregion=us-east-1" > /root/.aws/config
 
 # Copy configuration files
-COPY serverless/runpod_handler.py /workspace/configs
-COPY serverless/serverless_config_handler.py /workspace/configs
-COPY serverless/base.yml /workspace/configs
-COPY serverless/training_helpers /workspace/training/training_helpers
-COPY serverless/hpo_optuna.py /workspace/training
-COPY serverless/train.py /workspace/training
+COPY runpod_handler.py /workspace/configs
+COPY configs/ /workspace/configs
+COPY training_helpers/ /workspace/training/training_helpers
+COPY training/ /workspace/training
 
 
 CMD echo 'Preparing logging...' && \
