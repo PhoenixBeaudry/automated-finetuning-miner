@@ -87,7 +87,7 @@ RUN mkdir -p /root/.aws && \
     echo "[default]\nregion=us-east-1" > /root/.aws/config
 
 # Copy configuration files
-COPY runpod_handler.py /workspace/configs
+COPY runpod_handler.py /workspace
 COPY configs/ /workspace/configs
 COPY training_helpers/ /workspace/training/training_helpers
 COPY training/ /workspace/training
