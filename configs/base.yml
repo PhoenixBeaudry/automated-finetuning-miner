@@ -1,0 +1,62 @@
+##### EDITABLE CONFIGS #####
+
+## Main Training Params
+optimizer: adamw_8bit
+learning_rate: 2e-4
+gradient_accumulation_steps: 1 # Must match Accelerate Config
+micro_batch_size: 32
+eval_batch_size: 32
+weight_decay: 0.01
+gradient_checkpointing: true
+packing: true
+use_liger_kernel: true
+
+adapter: lora
+lora_r: 32
+lora_alpha: 32
+lora_dropout: 0
+lora_target_linear: true
+beta: 0.2
+use_neftune: false
+
+early_stopping: true
+early_stopping_patience: 4
+greater_is_better: false
+metric_for_best_model: eval_loss
+eval_steps: 50
+eval_strategy: steps
+
+max_steps: 10000
+save_steps: 100
+warmup_steps: 150
+save_strategy: steps
+logging_steps: 20
+save_total_limit: 5
+
+do_hpo: true
+dataloader_num_workers: 8
+val_set_size: 0.05
+sequence_len: 8196
+testing: false
+
+
+##### AUTOSET PARAMS #####
+model_params_count: 0
+job_id:
+hpo_run: false
+rl:
+datasets:
+dataset_prepared_path:
+output_dir: training_output
+wandb_project: Gradients-On-Demand
+wandb_mode: online
+wandb_run: your_name
+wandb_runid: default
+hub_model_id:
+hub_repo:
+hub_strategy: checkpoint
+hub_token:
+
+
+
+
