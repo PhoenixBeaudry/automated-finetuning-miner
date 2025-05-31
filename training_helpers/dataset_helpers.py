@@ -39,7 +39,7 @@ def load_sft_datasets(cfg: dict):
         example["prompt"] = prompt
         return example                  
     
-    if not cfg["datasets"][0]["field_input"] == None:
+    if cfg["datasets"][0]["field_input"] is not None:
         # Standardise column names
         ds_train = ds_train.rename_columns({
             cfg["datasets"][0]["field_instruction"]:   "prompt",
@@ -99,7 +99,7 @@ def load_dpo_datasets(cfg: dict):
 
 def load_grpo_datasets(cfg: dict):
     """
-    Return (train_ds, eval_ds) ready for TRL‑DPO.
+    Return (train_ds, eval_ds) ready for TRL‑GRPO.
     If cfg["val_set_size"] is 0 → eval_ds is None.
     """
     # Load **only one** split so we always get a Dataset, never a DatasetDict
