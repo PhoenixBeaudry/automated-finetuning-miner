@@ -1,7 +1,7 @@
 import runpod
 import os
 from datetime import datetime, timedelta
-from serverless_config_handler import setup_config
+from configs.serverless_config_handler import setup_config
 import subprocess
 import psutil
 import torch
