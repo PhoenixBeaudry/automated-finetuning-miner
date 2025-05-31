@@ -316,7 +316,7 @@ def objective(
             cleanup_resources()
             time.sleep(GPU_CLEANUP_WAIT_TIME)
             
-        elif "Reached time limit" in msg or "exceeded max_seconds" in msg:
+        elif "Reached time limit" in msg or "death signal" in msg:
             LOG.info("Trial %d ran out of time: attempting to find last loss...", trial.number)
             # Try to extract partial results
             for extractor in (loss_from_wandb, lambda _: loss_from_stdout(stdout), loss_from_state):
