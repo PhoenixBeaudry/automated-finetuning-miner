@@ -59,7 +59,12 @@ def handler(job):
         config_path = os.path.join(CONFIG_DIR, config_filename)
     
     # calculate required finished time
-    required_finish_time = (datetime.now() + timedelta(hours=hours_to_complete)).isoformat()
+    required_finish_time_dt = datetime.now() + timedelta(hours=hours_to_complete)
+    required_finish_time = required_finish_time_dt.isoformat()
+    
+    # Calculate timeout for hpo_optuna process (required_finish_time + 5 minutes)
+    hpo_timeout_dt = required_finish_time_dt + timedelta(minutes=5)
+    hpo_timeout_seconds = (hpo_timeout_dt - datetime.now()).total_seconds()
 
     setup_config(
         dataset,
@@ -92,16 +97,46 @@ def handler(job):
             bufsize=1
         )
         
-        # Stream logs
-        log_output = []
-        for line in iter(process.stdout.readline, ''):
-            print(line, end='')  # Print to RunPod logs
-            log_output.append(line)
-            if len(log_output) > 1000:  # Keep a rolling buffer of last 1000 lines
-                log_output.pop(0)
+        # Stream logs with timeout handling
+        import threading
+        import time
         
-        # Wait for process to complete
-        process.wait()
+        log_output = []
+        start_time = time.time()
+        
+        def stream_logs():
+            """Stream logs in a separate thread"""
+            try:
+                for line in iter(process.stdout.readline, ''):
+                    if not line:  # EOF
+                        break
+                    print(line, end='')  # Print to RunPod logs
+                    log_output.append(line)
+                    if len(log_output) > 1000:  # Keep a rolling buffer of last 1000 lines
+                        log_output.pop(0)
+            except Exception as e:
+                print(f"Log streaming error: {e}")
+        
+        # Start log streaming in background thread
+        log_thread = threading.Thread(target=stream_logs, daemon=True)
+        log_thread.start()
+        
+        # Wait for process to complete with timeout
+        try:
+            process.wait(timeout=hpo_timeout_seconds)
+        except subprocess.TimeoutExpired:
+            print(f"HPO process timed out after {hpo_timeout_seconds/60:.1f} minutes (required_finish_time + 5 minutes)")
+            process.terminate()
+            try:
+                process.wait(timeout=30)  # Give it 30 seconds to terminate gracefully
+            except subprocess.TimeoutExpired:
+                print("Process didn't terminate gracefully, killing it...")
+                process.kill()
+                process.wait()
+            raise Exception(f"HPO process exceeded timeout of {hpo_timeout_seconds/60:.1f} minutes")
+        
+        # Wait for log thread to finish (with a short timeout)
+        log_thread.join(timeout=5)
         
         # Check if process completed successfully
         if process.returncode != 0:
