@@ -319,7 +319,7 @@ def objective(
         elif "Reached time limit" in msg or "death signal" in msg:
             LOG.info("Trial %d ran out of time: attempting to find last loss...", trial.number)
             # Try to extract partial results
-            for extractor in (loss_from_wandb, lambda _: loss_from_stdout(stdout), loss_from_state):
+            for extractor in (loss_from_wandb, lambda _: loss_from_stdout(msg), loss_from_state):
                 val = extractor(out_dir) if extractor is loss_from_wandb or extractor is loss_from_state else extractor(None)
                 if val is not None:
                     LOG.info("Partial result found for trial %d: %.4f", trial.number, val)
