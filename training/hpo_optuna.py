@@ -406,7 +406,7 @@ def run_optuna(base_cfg_path: str) -> dict:
         load_if_exists=True,  # Allow resuming interrupted studies
         storage=storage,
         pruner=HyperbandPruner(
-            min_resource=1,  # Allow early pruning
+            min_resource=2,  # Allow early pruning
             max_resource=int(TRIAL_MAX_STEPS/TRIAL_EVAL_STEPS), 
             reduction_factor=3
         )
