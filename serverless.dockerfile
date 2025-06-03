@@ -59,7 +59,7 @@ RUN pip install --no-cache-dir \
 # RunPod specific
 RUN pip install -U runpod
 RUN pip install textstat
-
+RUN pip install detoxify
 
 WORKDIR /workspace
 RUN mkdir -p /workspace/configs /workspace/outputs /workspace/data /workspace/input_data /workspace/training
