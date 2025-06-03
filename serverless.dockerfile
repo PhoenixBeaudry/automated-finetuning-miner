@@ -60,6 +60,8 @@ RUN pip install --no-cache-dir \
 RUN pip install -U runpod
 RUN pip install textstat
 RUN pip install detoxify
+RUN pip install langcheck
+RUN pip install debugpy
 
 WORKDIR /workspace
 RUN mkdir -p /workspace/configs /workspace/outputs /workspace/data /workspace/input_data /workspace/training
