@@ -58,6 +58,7 @@ RUN pip install --no-cache-dir \
 
 # RunPod specific
 RUN pip install -U runpod
+RUN pip install textstat
 
 
 WORKDIR /workspace
