@@ -38,7 +38,7 @@ RUN pip install -U --no-cache-dir \
     protobuf
 
 # Install Flash Attention 2 (much faster than flash-attn v1)
-RUN pip install --no-cache-dir flash-attn==2.7.3 --no-build-isolation
+RUN pip install --no-cache-dir flash-attn==2.7.4.post1 --no-build-isolation
 
 # Install Triton for kernel compilation
 RUN pip install --no-cache-dir triton
