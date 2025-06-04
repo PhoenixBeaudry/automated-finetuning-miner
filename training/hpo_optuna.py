@@ -180,7 +180,7 @@ def run_subprocess(cmd, env, trial, timeout=60*60, printing=False):
                 break
             lines.append(ln)
             if printing:
-                print(ln)
+                print(ln, end="", flush=True)
             if "eval_loss" in ln and (m := _EVAL_RE.search(ln)):
                 trial.report(float(m.group(1)), len(lines))
                 if trial.should_prune():
