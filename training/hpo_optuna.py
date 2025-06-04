@@ -318,6 +318,8 @@ def objective(
         elif "Watchdog caught collective operation timeout" in msg:
             LOG.warning("Trial %d failed: NCCL/Communication error.", trial.number)
             LOG.warning("Error: %s", e)
+        elif "ecc" in msg:
+            LOG.warning("Trial %d failed: ECC error.", trial.number)
         elif "Reached time limit" in msg or "death signal" in msg:
             LOG.info("Trial %d ran out of time: attempting to find last loss...", trial.number)
             for extractor in (loss_from_wandb, lambda _: loss_from_stdout(msg), loss_from_state):
