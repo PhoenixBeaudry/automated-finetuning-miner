@@ -196,7 +196,6 @@ def run_subprocess(cmd, env, trial, timeout=60 * 60, print_logs=False):
     except subprocess.TimeoutExpired as e:
         kill_pg(proc)
         proc.wait()
-        raise RuntimeError("Subprocess timed out") from e
     finally:
         t.join()
         proc.stdout.close()
