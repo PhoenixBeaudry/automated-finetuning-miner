@@ -327,18 +327,14 @@ def objective(
                 if val is not None:
                     LOG.info("Partial result found for trial %d: %.4f", trial.number, val)
                     return val
+        elif "pruned" in msg:
+            LOG.info("Trial %d was pruned.", trial.number)
         else:
             LOG.warning("Trial %d failed with unknown error:\n%s", trial.number, msg)
 
         cleanup_resources()
         time.sleep(GPU_CLEANUP_WAIT_TIME)
         return penalty_value
-
-    except optuna.exceptions.TrialPruned:
-        LOG.info("Trial %d was pruned.", trial.number)
-        cleanup_resources()
-        return float("-inf") if cfg["rl"] == "grpo" else float("inf")
-
     except Exception as e:
         LOG.error("Unexpected error in trial %d: %s", trial.number, e)
         cleanup_resources()
@@ -351,24 +347,12 @@ def objective(
             LOG.info("Trial %d completed – eval_loss: %.4f", trial.number, val)
             # Cleanup temporary files
             shutil.rmtree(tmp_cfg.parent, ignore_errors=True)
-            # Save successful hyperparameters
-            save_trial_results(trial, val, out_dir)
             cleanup_resources()
             return val
 
     LOG.warning("eval_loss not found for trial %d – penalising.", trial.number)
     return float("-inf") if cfg["rl"] == "grpo" else float("inf")
 
-def save_trial_results(trial, value, out_dir):
-    """Save trial results for later analysis"""
-    results = {
-        "trial_number": trial.number,
-        "value": value,
-        "params": trial.params,
-        "timestamp": datetime.now().isoformat(),
-    }
-    with open(out_dir / "trial_results.json", "w") as f:
-        json.dump(results, f, indent=2)
 # ╰──────────────────────────────────────────────────────────────────────────╯
 
 # ╭──────────────────────── Run Optuna sweep ─────────────────────────────────╮
@@ -417,16 +401,6 @@ def run_optuna(base_cfg_path: str) -> dict:
         )
     )
     
-    # Save study configuration
-    study_config = {
-        "base_cfg_path": base_cfg_path,
-        "study_name": study_name,
-        "direction": direction,
-        "start_time": datetime.now().isoformat(),
-    }
-    with open(hpo_root / "study_config.json", "w") as f:
-        json.dump(study_config, f, indent=2)
-    
     # Calculate time budget
     time_remaining = datetime.fromisoformat(base_cfg['required_finish_time']) - datetime.now()
     seconds_remaining = max(0.0, time_remaining.total_seconds() * PERCENT_TIME_FOR_HPO)
@@ -452,25 +426,10 @@ def run_optuna(base_cfg_path: str) -> dict:
         else:
             raise
 
-    # Save final results
+    # Final results
     if study.best_trial:
         LOG.info("HPO finished – best eval_loss %.5f with params %s",
                 study.best_value, study.best_params)
-        
-        # Save all trial history
-        trial_history = []
-        for trial in study.trials:
-            trial_history.append({
-                "number": trial.number,
-                "value": trial.value,
-                "params": trial.params,
-                "state": str(trial.state),
-                "duration": (trial.datetime_complete - trial.datetime_start).total_seconds() 
-                           if trial.datetime_complete else None
-            })
-        
-        with open(hpo_root / "trial_history.json", "w") as f:
-            json.dump(trial_history, f, indent=2)
             
         return study.best_params
     else:
