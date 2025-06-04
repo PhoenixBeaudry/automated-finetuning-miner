@@ -206,12 +206,11 @@ def run_subprocess(cmd, env, trial, timeout=60 * 60, print_logs=False):
 
     return "".join(lines)
 
-def kill_pg(proc, sig=signal.SIGTERM):
-    """Kill the whole process group that accelerate launched."""
+def kill_pg(proc, sig_first=signal.SIGINT, grace=15):
     pgid = os.getpgid(proc.pid)
-    os.killpg(pgid, sig)
+    os.killpg(pgid, sig_first)       # polite ask: like Ctrl-C
     try:
-        proc.wait(10)
+        proc.wait(grace)
     except subprocess.TimeoutExpired:
         os.killpg(pgid, signal.SIGKILL)
         proc.wait()
