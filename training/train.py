@@ -11,8 +11,6 @@ from training_helpers.custom_callbacks import TimeLimitCallback
 from training_helpers.dataset_helpers import load_sft_datasets, load_dpo_datasets, load_grpo_datasets, load_tokenizer
 from training_helpers.model_helpers import load_model, get_lora_adapter
 from training_helpers.trainer_helpers import build_trainer_args, reward_functions
-import torch.distributed as dist
-from contextlib import suppress
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train a causal LM with SFT, DPO, or GRPO")
@@ -157,10 +155,6 @@ def main():
     finally:
         if not cfg["hpo_run"]:
             trainer.push_to_hub()
-        with suppress(Exception):
-            if dist.is_available() and dist.is_initialized():
-                dist.barrier()
-                dist.destroy_process_group()
         
 
 
