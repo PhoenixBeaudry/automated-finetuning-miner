@@ -110,7 +110,7 @@ def handler(job):
                 for line in iter(process.stdout.readline, ''):
                     if not line:  # EOF
                         break
-                    print(line, end='')  # Print to RunPod logs
+                    print(line, end="", flush=True)  # Print to RunPod logs
                     log_output.append(line)
                     if len(log_output) > 1000:  # Keep a rolling buffer of last 1000 lines
                         log_output.pop(0)
