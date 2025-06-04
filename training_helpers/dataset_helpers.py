@@ -55,6 +55,7 @@ def load_sft_datasets(cfg: dict):
             cfg["datasets"][0]["field_output"]:   "completion",
         })
 
+    orig_len = len(ds_train)
     _seen = set()                                           # lives outside the lambdas
 
     ds_train = (
@@ -74,6 +75,9 @@ def load_sft_datasets(cfg: dict):
         # 3️⃣ drop the helper column
         .remove_columns("__hash")
     )
+    dup_removed = orig_len - len(ds_train)
+    print(f"Removed {dup_removed:,} duplicate rows "
+        f"({dup_removed / orig_len:.2%} of original).")
     
     # Optional random split
     val_size = cfg.get("val_set_size", 0)
@@ -105,6 +109,8 @@ def load_dpo_datasets(cfg: dict):
         cfg["datasets"][0]["field_chosen"]:   "chosen",
         cfg["datasets"][0]["field_rejected"]: "rejected",
     })
+
+    orig_len = len(ds_train)
     _seen = set()                                           # lives outside the lambdas
 
     ds_train = (
@@ -125,6 +131,9 @@ def load_dpo_datasets(cfg: dict):
         # 3️⃣ drop the helper column
         .remove_columns("__hash")
     )
+    dup_removed = orig_len - len(ds_train)
+    print(f"Removed {dup_removed:,} duplicate rows "
+        f"({dup_removed / orig_len:.2%} of original).")
 
     # Optional random split
     val_size = cfg.get("val_set_size", 0)
@@ -155,6 +164,7 @@ def load_grpo_datasets(cfg: dict):
         cfg["datasets"][0]["field_prompt"]:   "prompt",
     })
 
+    orig_len = len(ds_train)
     _seen = set()                                           # lives outside the lambdas
 
     ds_train = (
@@ -173,6 +183,10 @@ def load_grpo_datasets(cfg: dict):
         # 3️⃣ drop the helper column
         .remove_columns("__hash")
     )
+
+    dup_removed = orig_len - len(ds_train)
+    print(f"Removed {dup_removed:,} duplicate rows "
+        f"({dup_removed / orig_len:.2%} of original).")
 
 
     # Optional random split
