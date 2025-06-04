@@ -29,10 +29,6 @@ class TimeLimitCallback(TrainerCallback):
         control: TrainerControl,
         **kwargs,
     ):
-        # Only rank-0 performs the lightweight time check.
-        if not state.is_local_process_zero:
-            return control
-
         # Skip until the next scheduled check step.
         if state.global_step < self.next_check_step:
             return control
