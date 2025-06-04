@@ -161,7 +161,10 @@ def cleanup_resources():
     except Exception as e:
         LOG.warning(f"Resource cleanup error: {e}")
 
-def run_subprocess(cmd, env, trial, timeout=60*60, printing=False):
+def run_subprocess(cmd, env, trial, timeout=60 * 60, print_logs=False):
+    """Run command and stream output while capturing logs."""
+
+    lines: list[str] = []
     proc = subprocess.Popen(
         cmd,
         env=env,
@@ -172,31 +175,31 @@ def run_subprocess(cmd, env, trial, timeout=60*60, printing=False):
         bufsize=1,
     )
 
-    lines = []
-
-    def _pump():
-        for ln in iter(proc.stdout.readline, ''):   # '' == EOF
+    def _pump() -> None:
+        for ln in iter(proc.stdout.readline, ""):
             if not ln:
                 break
             lines.append(ln)
-            if printing:
-                print(ln)
+            if print_logs:
+                print(ln, end="", flush=True)
             if "eval_loss" in ln and (m := _EVAL_RE.search(ln)):
                 trial.report(float(m.group(1)), len(lines))
                 if trial.should_prune():
                     kill_pg(proc)
+                    break
 
     t = threading.Thread(target=_pump, daemon=True)
     t.start()
 
     try:
         proc.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
         kill_pg(proc)
         proc.wait()
-
-    t.join()               # make sure reader has finished
-    proc.stdout.close()    # we own the close now
+        raise RuntimeError("Subprocess timed out") from e
+    finally:
+        t.join()
+        proc.stdout.close()
 
     if proc.returncode:
         raise subprocess.CalledProcessError(proc.returncode, cmd, "".join(lines))
@@ -297,50 +300,45 @@ def objective(
 
     # ── Run subprocess with monitoring ────────────────────────────────
     try:
-        if cfg["print_hpo"]:
-            stdout = run_subprocess(cmd, env, trial, timeout=MAX_MINUTES_PER_TRIAL*60+120, printing=True)
-        else:
-            stdout = run_subprocess(cmd, env, trial, timeout=MAX_MINUTES_PER_TRIAL*60+120, printing=False)
+        stdout = run_subprocess(
+            cmd,
+            env,
+            trial,
+            timeout=MAX_MINUTES_PER_TRIAL * 60 + 120,
+            print_logs=bool(cfg.get("print_hpo")),
+        )
 
     # ── Error handling with categorization ──────────────────────────
     except subprocess.CalledProcessError as e:
         msg = str(e.output)
-        
-        # Categorize errors
         penalty_value = float("-inf") if cfg["rl"] == "grpo" else float("inf")
-        
+
         if "torch.OutOfMemoryError" in msg:
             LOG.warning("Trial %d failed: OOM error.", trial.number)
-            # OOM might be due to specific hyperparameters, don't retry
-            cleanup_resources()
-            time.sleep(GPU_CLEANUP_WAIT_TIME)
-            
         elif "Watchdog caught collective operation timeout" in msg:
             LOG.warning("Trial %d failed: NCCL/Communication error.", trial.number)
-            LOG.warning(f"Error: {str(e)}")
-            cleanup_resources()
-            time.sleep(GPU_CLEANUP_WAIT_TIME)
-            
+            LOG.warning("Error: %s", e)
         elif "Reached time limit" in msg or "death signal" in msg:
             LOG.info("Trial %d ran out of time: attempting to find last loss...", trial.number)
-            # Try to extract partial results
             for extractor in (loss_from_wandb, lambda _: loss_from_stdout(msg), loss_from_state):
                 val = extractor(out_dir) if extractor is loss_from_wandb or extractor is loss_from_state else extractor(None)
                 if val is not None:
                     LOG.info("Partial result found for trial %d: %.4f", trial.number, val)
-                    return val       
+                    return val
         else:
             LOG.warning("Trial %d failed with unknown error:\n%s", trial.number, msg)
-            
+
+        cleanup_resources()
+        time.sleep(GPU_CLEANUP_WAIT_TIME)
         return penalty_value
-        
+
     except optuna.exceptions.TrialPruned:
         LOG.info("Trial %d was pruned.", trial.number)
         cleanup_resources()
         return float("-inf") if cfg["rl"] == "grpo" else float("inf")
-        
+
     except Exception as e:
-        LOG.error(f"Unexpected error in trial {trial.number}: {e}")
+        LOG.error("Unexpected error in trial %d: %s", trial.number, e)
         cleanup_resources()
         return float("-inf") if cfg["rl"] == "grpo" else float("inf")
 
