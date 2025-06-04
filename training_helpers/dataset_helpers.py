@@ -55,14 +55,25 @@ def load_sft_datasets(cfg: dict):
             cfg["datasets"][0]["field_output"]:   "completion",
         })
 
+    _seen = set()                                           # lives outside the lambdas
+
     ds_train = (
-        ds_train.map(lambda ex: {"__hash": hashlib.md5(
-            (ex.get("prompt","") + ex.get("completion","")).encode()
-        ).hexdigest()}, num_proc=8)
-        .drop_duplicates(column_names="__hash", keep="first")                # keep the first occurrence
+        ds_train
+        # 1️⃣ add a stable hash column
+        .map(
+            lambda ex: {"__hash": hashlib.md5(
+                (ex.get("prompt", "")
+                + ex.get("completion", "")
+                ).encode()
+            ).hexdigest()},
+            num_proc=8
+        )
+        # 2️⃣ keep only the first row for every hash
+        .filter(lambda ex: ex["__hash"] not in _seen and not _seen.add(ex["__hash"]),
+                num_proc=1)                    # single-proc so `_seen` is shared
+        # 3️⃣ drop the helper column
         .remove_columns("__hash")
     )
-
     
     # Optional random split
     val_size = cfg.get("val_set_size", 0)
@@ -94,11 +105,24 @@ def load_dpo_datasets(cfg: dict):
         cfg["datasets"][0]["field_chosen"]:   "chosen",
         cfg["datasets"][0]["field_rejected"]: "rejected",
     })
+    _seen = set()                                           # lives outside the lambdas
+
     ds_train = (
-        ds_train.map(lambda ex: {"__hash": hashlib.md5(
-            (ex.get("prompt","") + ex.get("chosen","") + ex.get("rejection","")).encode()
-        ).hexdigest()}, num_proc=8)
-        .drop_duplicates(column_names="__hash", keep="first")                # keep the first occurrence
+        ds_train
+        # 1️⃣ add a stable hash column
+        .map(
+            lambda ex: {"__hash": hashlib.md5(
+                (ex.get("prompt", "")
+                + ex.get("chosen", "")        # use "rejected" if that’s your column name
+                + ex.get("rejected", "")
+                ).encode()
+            ).hexdigest()},
+            num_proc=8
+        )
+        # 2️⃣ keep only the first row for every hash
+        .filter(lambda ex: ex["__hash"] not in _seen and not _seen.add(ex["__hash"]),
+                num_proc=1)                    # single-proc so `_seen` is shared
+        # 3️⃣ drop the helper column
         .remove_columns("__hash")
     )
 
@@ -130,11 +154,23 @@ def load_grpo_datasets(cfg: dict):
     ds_train = ds_train.rename_columns({
         cfg["datasets"][0]["field_prompt"]:   "prompt",
     })
+
+    _seen = set()                                           # lives outside the lambdas
+
     ds_train = (
-        ds_train.map(lambda ex: {"__hash": hashlib.md5(
-            (ex.get("prompt","")).encode()
-        ).hexdigest()}, num_proc=8)
-        .drop_duplicates(column_names="__hash", keep="first")                # keep the first occurrence
+        ds_train
+        # 1️⃣ add a stable hash column
+        .map(
+            lambda ex: {"__hash": hashlib.md5(
+                (ex.get("prompt", "")
+                ).encode()
+            ).hexdigest()},
+            num_proc=8
+        )
+        # 2️⃣ keep only the first row for every hash
+        .filter(lambda ex: ex["__hash"] not in _seen and not _seen.add(ex["__hash"]),
+                num_proc=1)                    # single-proc so `_seen` is shared
+        # 3️⃣ drop the helper column
         .remove_columns("__hash")
     )
 
