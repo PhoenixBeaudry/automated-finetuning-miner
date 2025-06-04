@@ -2,6 +2,59 @@ import aiohttp
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
+# ─── Cleanlab helpers ──────────────────────────────────────────────────────────
+from cleanlab.outlier import OutOfDistribution      # ⓒ cleanlab 2.x
+from sentence_transformers import SentenceTransformer
+import numpy as np, torch, math
+
+
+def _clean_dataset_with_cleanlab(ds, cfg, cols):
+    """
+    Returns a *filtered* copy of `ds` containing only the most in-distribution
+    rows according to Cleanlab's OOD detector.
+
+    Args:
+        ds   : HuggingFace `datasets.Dataset`
+        cfg  : your existing config dict
+        cols : tuple[str]   (# columns to concat into one string per row)
+
+    Config flags (with sensible fallbacks):
+        cfg["cleanlab"]           → bool      | default False
+        cfg["cleanlab_keep_frac"] → float [0,1] | default 0.90
+        cfg["embed_model"]        → str       | default all-MiniLM-L6-v2
+        cfg["embed_batch"]        → int       | default 64
+    """
+    if not cfg.get("cleanlab", False):
+        return ds   # no-op ─ user disabled
+
+    keep_frac = float(cfg.get("cleanlab_keep_frac", 0.90))
+    assert 0 < keep_frac < 1, "keep_frac must be inside (0,1)"
+
+    # 1 · Flatten each row into a single free-text string
+    concat = ["\n".join(str(ex[c]).strip() for c in cols if ex.get(c))
+              for ex in ds]
+
+    # 2 · Compute sentence embeddings (≈1.2 GB/min on A100)
+    model_name = cfg.get("embed_model", "sentence-transformers/all-MiniLM-L6-v2")
+    sbert = SentenceTransformer(model_name,
+                                device="cuda" if torch.cuda.is_available() else "cpu")
+    emb = sbert.encode(concat,
+                       batch_size=int(cfg.get("embed_batch", 64)),
+                       show_progress_bar=False,
+                       convert_to_numpy=True,
+                       normalize_embeddings=True)
+
+    # 3 · Score each row with Cleanlab
+    ood = OutOfDistribution()
+    scores = ood.fit_score(features=emb)   # lower = more in-distribution
+
+    # 4 · Keep the most in-distribution rows
+    thresh = np.quantile(scores, keep_frac)      # e.g. 90 % kept
+    idx_keep = np.where(scores <= thresh)[0].tolist()
+    return ds.select(idx_keep)
+
+
+
 def load_tokenizer(model_name: str, cfg: dict):
     tok = AutoTokenizer.from_pretrained(
         model_name,
@@ -54,6 +107,13 @@ def load_sft_datasets(cfg: dict):
             cfg["datasets"][0]["field_output"]:   "completion",
         })
 
+     # Cleanlab pass (drops the noisiest/outlier rows)
+    ds_train = _clean_dataset_with_cleanlab(
+        ds_train,
+        cfg,
+        cols=("prompt", "completion")  # columns to concat
+    )
+
     
     # Optional random split
     val_size = cfg.get("val_set_size", 0)
@@ -86,6 +146,13 @@ def load_dpo_datasets(cfg: dict):
         cfg["datasets"][0]["field_rejected"]: "rejected",
     })
 
+    # Cleanlab pass (drops the noisiest/outlier rows)
+    ds_train = _clean_dataset_with_cleanlab(
+        ds_train,
+        cfg,
+        cols=("prompt", "chosen", "rejected")  # columns to concat
+    )
+
     # Optional random split
     val_size = cfg.get("val_set_size", 0)
     if val_size:
@@ -114,6 +181,13 @@ def load_grpo_datasets(cfg: dict):
     ds_train = ds_train.rename_columns({
         cfg["datasets"][0]["field_prompt"]:   "prompt",
     })
+
+    # Cleanlab pass (drops the noisiest/outlier rows)
+    ds_train = _clean_dataset_with_cleanlab(
+        ds_train,
+        cfg,
+        cols=("prompt")  # columns to concat
+    )
 
     # Optional random split
     val_size = cfg.get("val_set_size", 0)

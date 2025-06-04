@@ -33,6 +33,11 @@ save_strategy: steps
 logging_steps: 20
 save_total_limit: 5
 
+cleanlab: true               # turn filtering on/off
+cleanlab_keep_frac: 0.92     # keep top-92 % (empirically sweet spot)
+embed_model: sentence-transformers/all-MiniLM-L6-v2
+embed_batch: 128
+
 do_hpo: true
 dataloader_num_workers: 8
 val_set_size: 0.05

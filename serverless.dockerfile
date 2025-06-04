@@ -63,6 +63,9 @@ RUN pip install detoxify
 RUN pip install langcheck
 RUN pip install debugpy
 
+RUN pip install cleanlab
+RUN pip install sentence-transformers
+
 WORKDIR /workspace
 RUN mkdir -p /workspace/configs /workspace/outputs /workspace/data /workspace/input_data /workspace/training
 
