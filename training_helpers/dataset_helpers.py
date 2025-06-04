@@ -108,11 +108,11 @@ def load_sft_datasets(cfg: dict):
         })
 
      # Cleanlab pass (drops the noisiest/outlier rows)
-    ds_train = _clean_dataset_with_cleanlab(
-        ds_train,
-        cfg,
-        cols=("prompt", "completion")  # columns to concat
-    )
+    # ds_train = _clean_dataset_with_cleanlab(
+    #     ds_train,
+    #     cfg,
+    #     cols=("prompt", "completion")  # columns to concat
+    # )
 
     
     # Optional random split
@@ -147,11 +147,11 @@ def load_dpo_datasets(cfg: dict):
     })
 
     # Cleanlab pass (drops the noisiest/outlier rows)
-    ds_train = _clean_dataset_with_cleanlab(
-        ds_train,
-        cfg,
-        cols=("prompt", "chosen", "rejected")  # columns to concat
-    )
+    # ds_train = _clean_dataset_with_cleanlab(
+    #     ds_train,
+    #     cfg,
+    #     cols=("prompt", "chosen", "rejected")  # columns to concat
+    # )
 
     # Optional random split
     val_size = cfg.get("val_set_size", 0)
@@ -183,11 +183,11 @@ def load_grpo_datasets(cfg: dict):
     })
 
     # Cleanlab pass (drops the noisiest/outlier rows)
-    ds_train = _clean_dataset_with_cleanlab(
-        ds_train,
-        cfg,
-        cols=("prompt")  # columns to concat
-    )
+    # ds_train = _clean_dataset_with_cleanlab(
+    #     ds_train,
+    #     cfg,
+    #     cols=("prompt")  # columns to concat
+    # )
 
     # Optional random split
     val_size = cfg.get("val_set_size", 0)
