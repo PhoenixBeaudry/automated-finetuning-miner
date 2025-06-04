@@ -128,16 +128,7 @@ def main():
     else:
         peft_config = None
 
-    if cfg["testing"]:
-        # ── HPO trial: auto‑subset the corpus ───────────────────────────────────
-        # 1. compute target subset sizes
-        target_train = int(len(train_dataset)/2)
-        target_eval = int(len(eval_dataset)/2)
-        # deterministic shuffle → reproducible trials
-        train_dataset = train_dataset.shuffle(seed=42).select(range(target_train))
-        eval_dataset  = eval_dataset.shuffle(seed=42).select(range(target_eval))
-
-    elif cfg["hpo_run"]:
+    if cfg["hpo_run"] or cfg["testing"]:
         # ── HPO trial: auto‑subset the corpus ───────────────────────────────────
         # 1. compute target subset sizes
         SUBSET_FRAC   = 0.02          # 2 %
@@ -152,7 +143,7 @@ def main():
 
         # deterministic shuffle → reproducible trials
         train_dataset = train_dataset.shuffle(seed=42).select(range(target_train))
-        eval_dataset  = eval_dataset .shuffle(seed=42).select(range(target_eval))
+        eval_dataset  = eval_dataset.shuffle(seed=42).select(range(target_eval))
 
     
 
