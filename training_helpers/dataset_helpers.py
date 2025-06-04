@@ -59,7 +59,7 @@ def load_sft_datasets(cfg: dict):
         ds_train.map(lambda ex: {"__hash": hashlib.md5(
             (ex.get("prompt","") + ex.get("completion","")).encode()
         ).hexdigest()}, num_proc=8)
-        .unique("__hash")                # keep the first occurrence
+        .drop_duplicates(column_names="__hash", keep="first")                # keep the first occurrence
         .remove_columns("__hash")
     )
 
@@ -98,7 +98,7 @@ def load_dpo_datasets(cfg: dict):
         ds_train.map(lambda ex: {"__hash": hashlib.md5(
             (ex.get("prompt","") + ex.get("chosen","") + ex.get("rejection","")).encode()
         ).hexdigest()}, num_proc=8)
-        .unique("__hash")                # keep the first occurrence
+        .drop_duplicates(column_names="__hash", keep="first")                # keep the first occurrence
         .remove_columns("__hash")
     )
 
@@ -134,7 +134,7 @@ def load_grpo_datasets(cfg: dict):
         ds_train.map(lambda ex: {"__hash": hashlib.md5(
             (ex.get("prompt","")).encode()
         ).hexdigest()}, num_proc=8)
-        .unique("__hash")                # keep the first occurrence
+        .drop_duplicates(column_names="__hash", keep="first")                # keep the first occurrence
         .remove_columns("__hash")
     )
 
