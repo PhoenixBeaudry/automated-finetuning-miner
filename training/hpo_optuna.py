@@ -319,7 +319,7 @@ def objective(
             LOG.warning("Error: %s", e)
         elif "ecc" in msg:
             LOG.warning("Trial %d failed: ECC error.", trial.number)
-        elif "Reached time limit" in msg or "death signal" in msg:
+        elif "Reached time limit" in msg or "death signal" in msg or "Subprocess timed out" in msg:
             LOG.info("Trial %d ran out of time: attempting to find last loss...", trial.number)
             for extractor in (loss_from_wandb, lambda _: loss_from_stdout(msg), loss_from_state):
                 val = extractor(out_dir) if extractor is loss_from_wandb or extractor is loss_from_state else extractor(None)
