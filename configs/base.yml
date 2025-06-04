@@ -25,6 +25,7 @@ greater_is_better: false
 metric_for_best_model: eval_loss
 eval_steps: 50
 eval_strategy: steps
+print_hpo: true
 
 max_steps: 10000
 save_steps: 100

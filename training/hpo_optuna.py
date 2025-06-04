@@ -161,7 +161,7 @@ def cleanup_resources():
     except Exception as e:
         LOG.warning(f"Resource cleanup error: {e}")
 
-def run_subprocess(cmd, env, trial, timeout=60*60):
+def run_subprocess(cmd, env, trial, timeout=60*60, printing=False):
     proc = subprocess.Popen(
         cmd,
         env=env,
@@ -179,6 +179,8 @@ def run_subprocess(cmd, env, trial, timeout=60*60):
             if not ln:
                 break
             lines.append(ln)
+            if printing:
+                print(ln)
             if "eval_loss" in ln and (m := _EVAL_RE.search(ln)):
                 trial.report(float(m.group(1)), len(lines))
                 if trial.should_prune():
@@ -295,7 +297,10 @@ def objective(
 
     # ── Run subprocess with monitoring ────────────────────────────────
     try:
-        stdout = run_subprocess(cmd, env, trial, timeout=MAX_MINUTES_PER_TRIAL*60+120)
+        if cfg["print_hpo"]:
+            stdout = run_subprocess(cmd, env, trial, timeout=MAX_MINUTES_PER_TRIAL*60+120, printing=True)
+        else:
+            stdout = run_subprocess(cmd, env, trial, timeout=MAX_MINUTES_PER_TRIAL*60+120, printing=False)
 
     # ── Error handling with categorization ──────────────────────────
     except subprocess.CalledProcessError as e:
