@@ -23,13 +23,13 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
 LOG = logging.getLogger("hpo_optuna")
 
-MAX_TRIALS_TO_RUN = 20
-TRIAL_MAX_STEPS = 240
-TRIAL_EVAL_STEPS = 60
+MAX_TRIALS_TO_RUN = 12
+TRIAL_MAX_STEPS = 200
+TRIAL_EVAL_STEPS = 50
 TESTING_TRIAL_MAX_STEPS = 50
 TESTING_TRIAL_EVAL_STEPS = 25
-PERCENT_TIME_FOR_HPO = 0.30
-MAX_MINUTES_PER_TRIAL = 30
+PERCENT_TIME_FOR_HPO = 0.25
+MAX_MINUTES_PER_TRIAL = 20
 GPU_CLEANUP_WAIT_TIME = 10  # seconds to wait for GPU cleanup
 
 
@@ -43,7 +43,7 @@ def sample_space(trial: optuna.Trial, cfg: dict) -> dict:
 
     # Invariant Params
     params = {
-        "optimizer": trial.suggest_categorical("optimizer", ["adamw_8bit", "lion_8bit", "adamw_torch"]),
+        "optimizer": trial.suggest_categorical("optimizer", ["lion_8bit"]),
     }
 
     # DPO Params
@@ -69,8 +69,8 @@ def sample_space(trial: optuna.Trial, cfg: dict) -> dict:
             "use_neftune": trial.suggest_categorical("use_neftune", [True, False]),
         }
         
-    # Always lora for models > 8b
-    if model_params_count > 8_000_000_000:
+    # Always lora for models > 12b
+    if model_params_count > 12_000_000_000:
         params |= {
             "adapter": trial.suggest_categorical("adapter", ["lora"]),
         }
