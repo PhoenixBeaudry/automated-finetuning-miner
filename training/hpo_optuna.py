@@ -23,13 +23,13 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
 LOG = logging.getLogger("hpo_optuna")
 
-MAX_TRIALS_TO_RUN = 12
+MAX_TRIALS_TO_RUN = 10
 TRIAL_MAX_STEPS = 200
-TRIAL_EVAL_STEPS = 50
+TRIAL_EVAL_STEPS = 100
 TESTING_TRIAL_MAX_STEPS = 50
 TESTING_TRIAL_EVAL_STEPS = 25
 PERCENT_TIME_FOR_HPO = 0.25
-MAX_MINUTES_PER_TRIAL = 20
+MAX_MINUTES_PER_TRIAL = 45
 GPU_CLEANUP_WAIT_TIME = 10  # seconds to wait for GPU cleanup
 
 
@@ -288,8 +288,7 @@ def objective(
 
     cmd = [
         "accelerate", "launch",
-        "--use_deepspeed",
-        "--zero_stage", "2",
+        "--multi_gpu",
         "--mixed_precision", "bf16",
         "--num_processes", str(torch.cuda.device_count()),  # Explicit GPU count
         path_to_train_file,
@@ -463,8 +462,7 @@ def launch_training(cfg_path: str):
 
     cmd = [
         "accelerate", "launch",
-        "--use_deepspeed",
-        "--zero_stage", "2",
+        "--multi_gpu",
         "--mixed_precision", "bf16",
         "--num_processes", str(torch.cuda.device_count()),
         path_to_train_file,
