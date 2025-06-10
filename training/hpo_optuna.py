@@ -24,8 +24,8 @@ logging.basicConfig(level=logging.INFO,
 LOG = logging.getLogger("hpo_optuna")
 
 MAX_TRIALS_TO_RUN = 10
-TRIAL_MAX_STEPS = 200
-TRIAL_EVAL_STEPS = 100
+TRIAL_MAX_STEPS = 100
+TRIAL_EVAL_STEPS = 25
 TESTING_TRIAL_MAX_STEPS = 50
 TESTING_TRIAL_EVAL_STEPS = 25
 PERCENT_TIME_FOR_HPO = 0.25
@@ -282,7 +282,7 @@ def objective(
     env["OPTUNA_TRIAL_ID"] = str(trial._trial_id)
 
     if cfg["rl"] == "grpo":
-        cfg["trl"]["max_completion_length"] = 64
+        cfg["trl"]["max_completion_length"] = 32
 
     path_to_train_file = "/workspace/training/train.py"
 

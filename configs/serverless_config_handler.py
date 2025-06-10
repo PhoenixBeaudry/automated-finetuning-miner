@@ -220,8 +220,8 @@ def _load_and_modify_config(
         filename, reward_funcs_names = create_reward_funcs_file(
             [reward_function.reward_func for reward_function in dataset_type.reward_functions], task_id
             )
-        config["eval_steps"] = 200
-        config["save_steps"] = 100
+        config["eval_steps"] = 300
+        config["save_steps"] = 300
         config["trl"] = {}
         config["trl"]["beta"] = 0.04
         config["trl"]["max_completion_length"] = 128
