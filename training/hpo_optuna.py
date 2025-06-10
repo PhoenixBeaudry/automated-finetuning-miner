@@ -282,7 +282,7 @@ def objective(
     env["OPTUNA_TRIAL_ID"] = str(trial._trial_id)
 
     if cfg["rl"] == "grpo":
-        cfg["trl"]["max_completion_length"] = 32
+        cfg["trl"]["max_completion_length"] = 64
 
     path_to_train_file = "/workspace/training/train.py"
 
