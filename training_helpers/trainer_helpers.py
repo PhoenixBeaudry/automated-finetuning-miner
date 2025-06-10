@@ -88,6 +88,7 @@ def build_trainer_args(cfg: dict):
             'reward_weights': cfg["trl"]["reward_weights"],
             'use_vllm': True,
             'vllm_mode': 'colocate',
+            'vllm_gpu_memory_utilization': 0.45,
             'greater_is_better': True,
         }
     else:
