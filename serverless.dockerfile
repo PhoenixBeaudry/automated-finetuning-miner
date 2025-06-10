@@ -66,6 +66,11 @@ RUN pip install debugpy
 RUN pip install cleanlab
 RUN pip install sentence-transformers
 
+RUN pip install -U --no-build-isolation vllm \
+    --pre \
+    --extra-index-url https://wheels.vllm.ai/nightly
+
+
 WORKDIR /workspace
 RUN mkdir -p /workspace/configs /workspace/outputs /workspace/data /workspace/input_data /workspace/training
 
