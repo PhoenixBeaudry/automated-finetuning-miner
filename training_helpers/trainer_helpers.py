@@ -86,7 +86,8 @@ def build_trainer_args(cfg: dict):
             'num_generations': int(cfg["trl"]["num_generations"]),
             'max_completion_length': int(cfg["trl"]["max_completion_length"]),
             'reward_weights': cfg["trl"]["reward_weights"],
-            'use_vllm': False,
+            'use_vllm': True,
+            'vllm_mode': 'colocate',
             'greater_is_better': True,
         }
     else:
