@@ -89,6 +89,7 @@ def build_trainer_args(cfg: dict):
             'use_vllm': True,
             'vllm_mode': 'colocate',
             'vllm_gpu_memory_utilization': 0.45,
+            'loss_type': 'dr_grpo',
             'greater_is_better': True,
         }
     else:
