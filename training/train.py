@@ -98,9 +98,9 @@ def build_trainer(cfg: dict, model, peft_config, tokenizer, train_ds, eval_ds):
         )
 
 
-def main():
-    args = parse_args()
-    cfg = load_config(args.config)
+def run_training(config_path: str) -> None:
+    """Run the training loop using the provided YAML config path."""
+    cfg = load_config(config_path)
     #####################################################
 
     logger = setup_logger()
@@ -109,7 +109,7 @@ def main():
     torch.backends.cudnn.benchmark = True
     torch.cuda.empty_cache()
     
-    logger.info("Loaded config from %s", args.config)
+    logger.info("Loaded config from %s", config_path)
     
     # after loading cfg...
     tokenizer = load_tokenizer(cfg['base_model'], cfg)
@@ -156,6 +156,11 @@ def main():
         if not cfg["hpo_run"]:
             trainer.push_to_hub()
         
+
+
+def main():
+    args = parse_args()
+    run_training(args.config)
 
 
 if __name__ == '__main__':
