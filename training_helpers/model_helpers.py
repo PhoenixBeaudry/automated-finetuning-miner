@@ -23,11 +23,6 @@ def load_model(model_name: str, cfg: dict) -> AutoModelForCausalLM:
                 return original_forward(*args, **kwargs)
             model.forward = forward_ignore_logits_to_keep
 
-
-    model.config.use_cache = False
-    model.generation_config.temperature=None
-    model.generation_config.top_p=None
-    model.generation_config.top_k=None
     model.train()
 
     return model
