@@ -4,10 +4,10 @@ hpo_optuna.py  –  1‑hour Optuna sweep → full training (multi‑GPU compati
 --------------------------------------------------------------------------
 * Trials log to <WANDB_PROJECT>-hpo and never push to Hugging Face.
 * eval_loss is extracted (in this order):
-    1) wandb-summary.json   2) stdout regex   3) trainer_state.json
+    1) wandb-summary.json   2) trainer_state.json
 """
 from __future__ import annotations
-import argparse, copy, json, logging, os, re, shutil, subprocess, tempfile, uuid, time
+import argparse, copy, json, logging, os, re, shutil, tempfile, uuid, time
 from pathlib import Path
 import yaml, optuna
 from datetime import datetime, timedelta
@@ -15,8 +15,9 @@ from optuna.pruners import HyperbandPruner
 from optuna.storages import RDBStorage
 import gc
 import torch
-import signal, threading
 import psutil
+from training.train import run_training
+from contextlib import contextmanager
 
 # ── logging ────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO,
@@ -31,6 +32,25 @@ TESTING_TRIAL_EVAL_STEPS = 25
 PERCENT_TIME_FOR_HPO = 0.25
 MAX_MINUTES_PER_TRIAL = 45
 GPU_CLEANUP_WAIT_TIME = 10  # seconds to wait for GPU cleanup
+
+
+@contextmanager
+def temp_environ(vars: dict):
+    """Temporarily set environment variables."""
+    old = {k: os.environ.get(k) for k in vars}
+    try:
+        for k, v in vars.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        yield
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 # ╭──────────────────────── Hyper‑parameter space ───────────────────────────╮
@@ -114,11 +134,6 @@ def loss_from_wandb(out_dir: Path) -> float | None:
                 LOG.warning(f"Failed to read wandb summary: {e}")
     return None
 
-def loss_from_stdout(stdout: str) -> float | None:
-    matches = _EVAL_RE.findall(stdout)
-    return float(matches[-1]) if matches else None
-
-def loss_from_state(out_dir: Path) -> float | None:
     """Extract loss from trainer state with retry logic"""
     p = out_dir / "trainer_state.json"
     for attempt in range(3):
@@ -161,58 +176,6 @@ def cleanup_resources():
     except Exception as e:
         LOG.warning(f"Resource cleanup error: {e}")
 
-def run_subprocess(cmd, env, trial, timeout=60 * 60, print_logs=False):
-    """Run command and stream output while capturing logs."""
-
-    lines: list[str] = []
-    proc = subprocess.Popen(
-        cmd,
-        env=env,
-        start_new_session=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-
-    def _pump() -> None:
-        for ln in iter(proc.stdout.readline, ""):
-            if not ln:
-                break
-            lines.append(ln)
-            if print_logs:
-                print(ln, end="", flush=True)
-            if "eval_loss" in ln and (m := _EVAL_RE.search(ln)):
-                trial.report(float(m.group(1)), len(lines))
-                if trial.should_prune():
-                    kill_pg(proc)
-                    break
-
-    t = threading.Thread(target=_pump, daemon=True)
-    t.start()
-
-    try:
-        proc.wait(timeout=timeout)
-    except subprocess.TimeoutExpired as e:
-        kill_pg(proc)
-        proc.wait()
-    finally:
-        t.join()
-        proc.stdout.close()
-
-    if proc.returncode:
-        raise subprocess.CalledProcessError(proc.returncode, cmd, "".join(lines))
-
-    return "".join(lines)
-
-def kill_pg(proc, sig_first=signal.SIGINT, grace=15):
-    pgid = os.getpgid(proc.pid)
-    os.killpg(pgid, sig_first)       # polite ask: like Ctrl-C
-    try:
-        proc.wait(grace)
-    except subprocess.TimeoutExpired:
-        os.killpg(pgid, signal.SIGKILL)
-        proc.wait()
 
 
 # ╭──────────────────────── Objective (single trial) ─────────────────────────╮
@@ -272,40 +235,26 @@ def objective(
 
     LOG.info("Starting trial %d with params: %s", trial.number, trial_params)
     
-    # ── prepare environment for subprocess ─────────────────────────────
-    env = os.environ.copy()
-    env["WANDB_PROJECT"] = hpo_project
-    env.pop("WANDB_RUN_ID", None)
-    env.pop("WANDB_NAME", None)
-    env["OPTUNA_STORAGE"] = storage_path
-    env["OPTUNA_STUDY_NAME"] = study_name
-    env["OPTUNA_TRIAL_ID"] = str(trial._trial_id)
+    # ── prepare environment variables ─────────────────────────────
+    env_vars = {
+        "WANDB_PROJECT": hpo_project,
+        "WANDB_RUN_ID": None,
+        "WANDB_NAME": None,
+        "OPTUNA_STORAGE": storage_path,
+        "OPTUNA_STUDY_NAME": study_name,
+        "OPTUNA_TRIAL_ID": str(trial._trial_id),
+    }
 
     if cfg["rl"] == "grpo":
         cfg["trl"]["max_completion_length"] = 32
 
-    path_to_train_file = "/workspace/training/train.py"
-
-    cmd = [
-        "accelerate", "launch",
-        "--mixed_precision", "bf16",
-        path_to_train_file,
-        "--config", str(tmp_cfg),
-    ]
-
-    # ── Run subprocess with monitoring ────────────────────────────────
     try:
-        stdout = run_subprocess(
-            cmd,
-            env,
-            trial,
-            timeout=MAX_MINUTES_PER_TRIAL * 60 + 120,
-            print_logs=bool(cfg.get("print_hpo")),
-        )
+        with temp_environ(env_vars):
+            run_training(str(tmp_cfg))
 
     # ── Error handling with categorization ──────────────────────────
-    except subprocess.CalledProcessError as e:
-        msg = str(e.output)
+    except Exception as e:
+        msg = str(e)
         penalty_value = float("-inf") if cfg["rl"] == "grpo" else float("inf")
 
         if "torch.OutOfMemoryError" in msg:
@@ -317,8 +266,8 @@ def objective(
             LOG.warning("Trial %d failed: ECC error.", trial.number)
         elif "Reached time limit" in msg or "death signal" in msg or "Subprocess timed out" in msg:
             LOG.info("Trial %d ran out of time: attempting to find last loss...", trial.number)
-            for extractor in (loss_from_wandb, lambda _: loss_from_stdout(msg), loss_from_state):
-                val = extractor(out_dir) if extractor is loss_from_wandb or extractor is loss_from_state else extractor(None)
+            for extractor in (loss_from_wandb, loss_from_state):
+                val = extractor(out_dir)
                 if val is not None:
                     LOG.info("Partial result found for trial %d: %.4f", trial.number, val)
                     return val
@@ -336,8 +285,8 @@ def objective(
         return float("-inf") if cfg["rl"] == "grpo" else float("inf")
 
     # ── extract eval_loss (3 fallback methods) ─────────────────────
-    for extractor in (loss_from_wandb, lambda _: loss_from_stdout(stdout), loss_from_state):
-        val = extractor(out_dir) if extractor is loss_from_wandb or extractor is loss_from_state else extractor(None)
+    for extractor in (loss_from_wandb, loss_from_state):
+        val = extractor(out_dir)
         if val is not None:
             LOG.info("Trial %d completed – eval_loss: %.4f", trial.number, val)
             # Cleanup temporary files
@@ -452,27 +401,15 @@ def launch_training(cfg_path: str):
     with open(cfg_path) as f:
         cfg = yaml.safe_load(f)
 
-    path_to_train_file = "/workspace/training/train.py"
-    
     # Ensure clean GPU state before full training
     cleanup_resources()
     time.sleep(GPU_CLEANUP_WAIT_TIME)
 
-    cmd = [
-        "accelerate", "launch",
-        "--mixed_precision", "bf16",
-        path_to_train_file,
-        "--config", cfg_path,
-    ]
-
     LOG.info("🚀  Starting full training run")
-    
-    # Set stability environment variables
-    env = os.environ.copy()
-    
+
     try:
-        subprocess.run(cmd, check=True, env=env)
-    except subprocess.CalledProcessError as e:
+        run_training(cfg_path)
+    except Exception as e:
         LOG.error(f"Full training failed: {e}")
         raise
 # ╰──────────────────────────────────────────────────────────────────────────╯
@@ -480,30 +417,37 @@ def launch_training(cfg_path: str):
 # ╭──────────────────────────── CLI entry‑point ──────────────────────────────╮
 def main():
     ap = argparse.ArgumentParser(description="HPO then full training")
-    ap.add_argument("--config", required=True, help="Base YAML config file")
-    ap.add_argument("--resume", action="store_true", help="Resume interrupted HPO study")
-    args = ap.parse_args()
-    
-    with open(args.config) as f:
+
+# ╭──────────────────────────── CLI entry‑point ──────────────────────────────╮
+def run_hpo_pipeline(cfg_path: str) -> None:
+    with open(cfg_path) as f:
         base_cfg = yaml.safe_load(f)
-        
-    if base_cfg["do_hpo"] == False:
-        launch_training(args.config)
+
+    if base_cfg.get("do_hpo") is False:
+        launch_training(cfg_path)
         return
-    
+
     try:
-        best_params = run_optuna(args.config)
-        optimised_cfg = write_opt_cfg(args.config, best_params)
-        
-        # Clean pause before full training
+        best_params = run_optuna(cfg_path)
+        optimised_cfg = write_opt_cfg(cfg_path, best_params)
+
         LOG.info("Pausing before full training run...")
         cleanup_resources()
         time.sleep(GPU_CLEANUP_WAIT_TIME * 2)
-        
+
         launch_training(optimised_cfg)
     except Exception as e:
         LOG.error(f"HPO pipeline failed: {e}")
         raise
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="HPO then full training")
+    ap.add_argument("--config", required=True, help="Base YAML config file")
+    ap.add_argument("--resume", action="store_true", help="Resume interrupted HPO study")
+    args = ap.parse_args()
+
+    run_hpo_pipeline(args.config)
 
 if __name__ == "__main__":
     main()
