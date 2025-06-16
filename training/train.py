@@ -111,7 +111,7 @@ def build_trainer(cfg: dict, model, peft_config, tokenizer, train_ds, eval_ds):
 
 
 def run_training(config_path: str) -> None:
-    """Run training given a path to a YAML configuration."""
+    """Run the training loop using the provided YAML config path."""
     cfg = load_config(config_path)
 
     logger = setup_logger()
@@ -119,9 +119,10 @@ def run_training(config_path: str) -> None:
     # Performance flags
     torch.backends.cudnn.benchmark = True
     torch.cuda.empty_cache()
-
+    
     logger.info("Loaded config from %s", config_path)
-
+    
+    # after loading cfg...
     tokenizer = load_tokenizer(cfg['base_model'], cfg)
 
     if cfg["rl"] == "dpo":
@@ -159,10 +160,10 @@ def run_training(config_path: str) -> None:
             trainer.push_to_hub()
 
 
-
-def main() -> None:
+def main():
     args = parse_args()
     run_training(args.config)
+
 
 if __name__ == '__main__':
     main()

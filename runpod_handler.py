@@ -2,6 +2,7 @@ import runpod
 import os
 from datetime import datetime, timedelta
 from configs.serverless_config_handler import setup_config
+from training.hpo_optuna import run_hpo_pipeline
 import psutil
 import torch
 from training.hpo_optuna import run_hpo_pipeline
@@ -62,9 +63,6 @@ def handler(job):
     required_finish_time_dt = datetime.now() + timedelta(hours=hours_to_complete)
     required_finish_time = required_finish_time_dt.isoformat()
     
-    # Calculate timeout for hpo_optuna process (required_finish_time + 5 minutes)
-    hpo_timeout_dt = required_finish_time_dt + timedelta(minutes=5)
-    hpo_timeout_seconds = (hpo_timeout_dt - datetime.now()).total_seconds()
 
     setup_config(
         dataset,
@@ -78,6 +76,8 @@ def handler(job):
         hpo
     )
     
+    # Execute the training process directly
+
     try:
         run_hpo_pipeline(config_path)
         return {

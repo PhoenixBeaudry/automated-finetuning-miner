@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse, copy, json, logging, os, re, shutil, tempfile, uuid, time
 from pathlib import Path
 import yaml, optuna
+from training.train import run_training
 from datetime import datetime, timedelta
 from optuna.pruners import HyperbandPruner
 from optuna.storages import RDBStorage
@@ -412,11 +413,23 @@ def launch_training(cfg_path: str):
     except Exception as e:
         LOG.error(f"Full training failed: {e}")
         raise
+
+def run_hpo_pipeline(config_path: str) -> None:
+    """Run HPO sweep (if enabled) followed by full training."""
+    with open(config_path) as f:
+        base_cfg = yaml.safe_load(f)
+
+    if base_cfg.get("do_hpo", True):
+        best_params = run_optuna(config_path)
+        config_path = write_opt_cfg(config_path, best_params)
+
+        LOG.info("Pausing before full training run...")
+        cleanup_resources()
+        time.sleep(GPU_CLEANUP_WAIT_TIME * 2)
+
+    launch_training(config_path)
 # ╰──────────────────────────────────────────────────────────────────────────╯
 
-# ╭──────────────────────────── CLI entry‑point ──────────────────────────────╮
-def main():
-    ap = argparse.ArgumentParser(description="HPO then full training")
 
 # ╭──────────────────────────── CLI entry‑point ──────────────────────────────╮
 def run_hpo_pipeline(cfg_path: str) -> None:
