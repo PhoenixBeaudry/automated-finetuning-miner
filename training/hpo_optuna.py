@@ -4,7 +4,7 @@ hpo_optuna.py  –  1‑hour Optuna sweep → full training (multi‑GPU compati
 --------------------------------------------------------------------------
 * Trials log to <WANDB_PROJECT>-hpo and never push to Hugging Face.
 * eval_loss is extracted (in this order):
-    1) wandb-summary.json   2) stdout regex   3) trainer_state.json
+    1) wandb-summary.json   2) trainer_state.json
 """
 from __future__ import annotations
 import argparse, copy, json, logging, os, re, shutil, tempfile, uuid, time
@@ -17,6 +17,8 @@ from optuna.storages import RDBStorage
 import gc
 import torch
 import psutil
+from training.train import run_training
+from contextlib import contextmanager
 
 # ── logging ────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO,
@@ -31,6 +33,25 @@ TESTING_TRIAL_EVAL_STEPS = 25
 PERCENT_TIME_FOR_HPO = 0.25
 MAX_MINUTES_PER_TRIAL = 45
 GPU_CLEANUP_WAIT_TIME = 10  # seconds to wait for GPU cleanup
+
+
+@contextmanager
+def temp_environ(vars: dict):
+    """Temporarily set environment variables."""
+    old = {k: os.environ.get(k) for k in vars}
+    try:
+        for k, v in vars.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        yield
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 # ╭──────────────────────── Hyper‑parameter space ───────────────────────────╮
@@ -114,11 +135,6 @@ def loss_from_wandb(out_dir: Path) -> float | None:
                 LOG.warning(f"Failed to read wandb summary: {e}")
     return None
 
-def loss_from_stdout(stdout: str) -> float | None:
-    matches = _EVAL_RE.findall(stdout)
-    return float(matches[-1]) if matches else None
-
-def loss_from_state(out_dir: Path) -> float | None:
     """Extract loss from trainer state with retry logic"""
     p = out_dir / "trainer_state.json"
     for attempt in range(3):
@@ -220,22 +236,22 @@ def objective(
 
     LOG.info("Starting trial %d with params: %s", trial.number, trial_params)
     
-    # ── prepare environment for subprocess ─────────────────────────────
-    env = os.environ.copy()
-    env["WANDB_PROJECT"] = hpo_project
-    env.pop("WANDB_RUN_ID", None)
-    env.pop("WANDB_NAME", None)
-    env["OPTUNA_STORAGE"] = storage_path
-    env["OPTUNA_STUDY_NAME"] = study_name
-    env["OPTUNA_TRIAL_ID"] = str(trial._trial_id)
+    # ── prepare environment variables ─────────────────────────────
+    env_vars = {
+        "WANDB_PROJECT": hpo_project,
+        "WANDB_RUN_ID": None,
+        "WANDB_NAME": None,
+        "OPTUNA_STORAGE": storage_path,
+        "OPTUNA_STUDY_NAME": study_name,
+        "OPTUNA_TRIAL_ID": str(trial._trial_id),
+    }
 
     if cfg["rl"] == "grpo":
         cfg["trl"]["max_completion_length"] = 32
 
-    # ── Run training directly without subprocess ─────────────────────
     try:
-        run_training(str(tmp_cfg))
-        stdout = ""
+        with temp_environ(env_vars):
+            run_training(str(tmp_cfg))
 
     # ── Error handling with categorization ──────────────────────────
     except Exception as e:
@@ -251,8 +267,8 @@ def objective(
             LOG.warning("Trial %d failed: ECC error.", trial.number)
         elif "Reached time limit" in msg or "death signal" in msg or "Subprocess timed out" in msg:
             LOG.info("Trial %d ran out of time: attempting to find last loss...", trial.number)
-            for extractor in (loss_from_wandb, lambda _: loss_from_stdout(msg), loss_from_state):
-                val = extractor(out_dir) if extractor is loss_from_wandb or extractor is loss_from_state else extractor(None)
+            for extractor in (loss_from_wandb, loss_from_state):
+                val = extractor(out_dir)
                 if val is not None:
                     LOG.info("Partial result found for trial %d: %.4f", trial.number, val)
                     return val
@@ -270,8 +286,8 @@ def objective(
         return float("-inf") if cfg["rl"] == "grpo" else float("inf")
 
     # ── extract eval_loss (3 fallback methods) ─────────────────────
-    for extractor in (loss_from_wandb, lambda _: loss_from_stdout(stdout), loss_from_state):
-        val = extractor(out_dir) if extractor is loss_from_wandb or extractor is loss_from_state else extractor(None)
+    for extractor in (loss_from_wandb, loss_from_state):
+        val = extractor(out_dir)
         if val is not None:
             LOG.info("Trial %d completed – eval_loss: %.4f", trial.number, val)
             # Cleanup temporary files
@@ -414,13 +430,36 @@ def run_hpo_pipeline(config_path: str) -> None:
     launch_training(config_path)
 # ╰──────────────────────────────────────────────────────────────────────────╯
 
+
 # ╭──────────────────────────── CLI entry‑point ──────────────────────────────╮
-def main():
+def run_hpo_pipeline(cfg_path: str) -> None:
+    with open(cfg_path) as f:
+        base_cfg = yaml.safe_load(f)
+
+    if base_cfg.get("do_hpo") is False:
+        launch_training(cfg_path)
+        return
+
+    try:
+        best_params = run_optuna(cfg_path)
+        optimised_cfg = write_opt_cfg(cfg_path, best_params)
+
+        LOG.info("Pausing before full training run...")
+        cleanup_resources()
+        time.sleep(GPU_CLEANUP_WAIT_TIME * 2)
+
+        launch_training(optimised_cfg)
+    except Exception as e:
+        LOG.error(f"HPO pipeline failed: {e}")
+        raise
+
+
+def main() -> None:
     ap = argparse.ArgumentParser(description="HPO then full training")
     ap.add_argument("--config", required=True, help="Base YAML config file")
     ap.add_argument("--resume", action="store_true", help="Resume interrupted HPO study")
     args = ap.parse_args()
-    
+
     run_hpo_pipeline(args.config)
 
 if __name__ == "__main__":

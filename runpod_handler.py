@@ -5,6 +5,7 @@ from configs.serverless_config_handler import setup_config
 from training.hpo_optuna import run_hpo_pipeline
 import psutil
 import torch
+from training.hpo_optuna import run_hpo_pipeline
 
 
 # You'll need to adapt your existing training code for the serverless environment
@@ -76,6 +77,7 @@ def handler(job):
     )
     
     # Execute the training process directly
+
     try:
         run_hpo_pipeline(config_path)
         return {
@@ -83,6 +85,7 @@ def handler(job):
             "task_id": job_id,
             "model_repo": expected_repo_name,
             "training_completed": datetime.now().isoformat(),
+            "last_logs": "See server logs"
         }
     except Exception as e:
         print(f"Error running HPO: {str(e)}")
