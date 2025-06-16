@@ -288,9 +288,7 @@ def objective(
 
     cmd = [
         "accelerate", "launch",
-        "--multi_gpu",
         "--mixed_precision", "bf16",
-        "--num_processes", str(torch.cuda.device_count()),  # Explicit GPU count
         path_to_train_file,
         "--config", str(tmp_cfg),
     ]
@@ -462,9 +460,7 @@ def launch_training(cfg_path: str):
 
     cmd = [
         "accelerate", "launch",
-        "--multi_gpu",
         "--mixed_precision", "bf16",
-        "--num_processes", str(torch.cuda.device_count()),
         path_to_train_file,
         "--config", cfg_path,
     ]
