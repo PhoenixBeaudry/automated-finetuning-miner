@@ -6,9 +6,21 @@ import yaml
 from datetime import datetime
 import torch
 from transformers import EarlyStoppingCallback
-from trl import SFTConfig, SFTTrainer, DPOConfig, DPOTrainer, GRPOConfig, GRPOTrainer
+from trl import (
+    SFTConfig,
+    SFTTrainer,
+    DPOConfig,
+    DPOTrainer,
+    GRPOConfig,
+    GRPOTrainer,
+)
 from training_helpers.custom_callbacks import TimeLimitCallback
-from training_helpers.dataset_helpers import load_sft_datasets, load_dpo_datasets, load_grpo_datasets, load_tokenizer
+from training_helpers.dataset_helpers import (
+    load_sft_datasets,
+    load_dpo_datasets,
+    load_grpo_datasets,
+    load_tokenizer,
+)
 from training_helpers.model_helpers import load_model, get_lora_adapter
 from training_helpers.trainer_helpers import build_trainer_args, reward_functions
 
@@ -98,20 +110,18 @@ def build_trainer(cfg: dict, model, peft_config, tokenizer, train_ds, eval_ds):
         )
 
 
-def main():
-    args = parse_args()
-    cfg = load_config(args.config)
-    #####################################################
+def run_training(config_path: str) -> None:
+    """Run training given a path to a YAML configuration."""
+    cfg = load_config(config_path)
 
     logger = setup_logger()
-    
+
     # Performance flags
     torch.backends.cudnn.benchmark = True
     torch.cuda.empty_cache()
-    
-    logger.info("Loaded config from %s", args.config)
-    
-    # after loading cfg...
+
+    logger.info("Loaded config from %s", config_path)
+
     tokenizer = load_tokenizer(cfg['base_model'], cfg)
 
     if cfg["rl"] == "dpo":
@@ -129,34 +139,30 @@ def main():
         peft_config = None
 
     if cfg["hpo_run"] or cfg["testing"]:
-        # ── HPO trial: auto‑subset the corpus ───────────────────────────────────
-        # 1. compute target subset sizes
-        SUBSET_FRAC   = 0.02          # 2 %
-        MIN_PAIRS     = 1_000         # never go below this
-        MAX_PAIRS     = 6_000        # never go above this
+        SUBSET_FRAC = 0.02
+        MIN_PAIRS = 1_000
+        MAX_PAIRS = 6_000
         target_train = int(max(MIN_PAIRS, min(MAX_PAIRS, len(train_dataset) * SUBSET_FRAC)))
         target_eval = int(max(MIN_PAIRS, min(MAX_PAIRS, len(eval_dataset) * SUBSET_FRAC)))
-
-        # No lower than dataset size
         target_train = min(target_train, len(train_dataset))
         target_eval = min(target_eval, len(eval_dataset))
-
-        # deterministic shuffle → reproducible trials
         train_dataset = train_dataset.shuffle(seed=42).select(range(target_train))
-        eval_dataset  = eval_dataset.shuffle(seed=42).select(range(target_eval))
-
-    
+        eval_dataset = eval_dataset.shuffle(seed=42).select(range(target_eval))
 
     logger.info("Starting Full Model Training...")
     trainer = build_trainer(cfg, model, peft_config, tokenizer, train_dataset, eval_dataset)
-    
+
     try:
         trainer.train()
     finally:
         if not cfg["hpo_run"]:
             trainer.push_to_hub()
-        
 
+
+
+def main() -> None:
+    args = parse_args()
+    run_training(args.config)
 
 if __name__ == '__main__':
     main()

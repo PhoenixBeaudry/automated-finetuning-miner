@@ -2,9 +2,9 @@ import runpod
 import os
 from datetime import datetime, timedelta
 from configs.serverless_config_handler import setup_config
-import subprocess
 import psutil
 import torch
+from training.hpo_optuna import run_hpo_pipeline
 
 
 # You'll need to adapt your existing training code for the serverless environment
@@ -78,86 +78,21 @@ def handler(job):
         hpo
     )
     
-    # Execute the training process
-     # Run the HPO script
     try:
-        # Assuming hpo_optuna.py is in /workspace
-        cmd = [
-            "python", 
-            "/workspace/training/hpo_optuna.py", 
-            "--config", config_path
-        ]
-        
-        # Run the command
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
-        )
-        
-        # Stream logs with timeout handling
-        import threading
-        import time
-        
-        log_output = []
-        start_time = time.time()
-        
-        def stream_logs():
-            """Stream logs in a separate thread"""
-            try:
-                for line in iter(process.stdout.readline, ''):
-                    if not line:  # EOF
-                        break
-                    print(line, end="", flush=True)  # Print to RunPod logs
-                    log_output.append(line)
-                    if len(log_output) > 1000:  # Keep a rolling buffer of last 1000 lines
-                        log_output.pop(0)
-            except Exception as e:
-                print(f"Log streaming error: {e}")
-        
-        # Start log streaming in background thread
-        log_thread = threading.Thread(target=stream_logs, daemon=True)
-        log_thread.start()
-        
-        # Wait for process to complete with timeout
-        try:
-            process.wait(timeout=hpo_timeout_seconds)
-        except subprocess.TimeoutExpired:
-            print(f"HPO process timed out after {hpo_timeout_seconds/60:.1f} minutes (required_finish_time + 5 minutes)")
-            process.terminate()
-            try:
-                process.wait(timeout=30)  # Give it 30 seconds to terminate gracefully
-            except subprocess.TimeoutExpired:
-                print("Process didn't terminate gracefully, killing it...")
-                process.kill()
-                process.wait()
-            raise Exception(f"HPO process exceeded timeout of {hpo_timeout_seconds/60:.1f} minutes")
-        
-        # Wait for log thread to finish (with a short timeout)
-        log_thread.join(timeout=5)
-        
-        # Check if process completed successfully
-        if process.returncode != 0:
-            raise Exception(f"HPO process failed with return code {process.returncode}")
-        
-        # Return results
+        run_hpo_pipeline(config_path)
         return {
             "success": True,
             "task_id": job_id,
             "model_repo": expected_repo_name,
             "training_completed": datetime.now().isoformat(),
-            "last_logs": ''.join(log_output[-100:])  # Return last 100 lines of logs
+            "last_logs": "See server logs"
         }
-    
     except Exception as e:
         print(f"Error running HPO: {str(e)}")
         return {
             "success": False,
             "task_id": job_id,
             "error": str(e),
-            "last_logs": ''.join(log_output[-100:]) if 'log_output' in locals() else "No logs captured"
         }
 
 
