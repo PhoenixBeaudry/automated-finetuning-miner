@@ -58,9 +58,6 @@ def build_trainer_args(cfg: dict):
 
         # Optimization Args
         "bf16": True,
-        "ddp_find_unused_parameters": False,
-        "ddp_timeout": 7200,
-        "dataloader_pin_memory": False,
         "use_liger_kernel": cfg['use_liger_kernel'],
         "auto_find_batch_size": True,
 

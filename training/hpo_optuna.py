@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
 LOG = logging.getLogger("hpo_optuna")
 
-MAX_TRIALS_TO_RUN = 10
+MAX_TRIALS_TO_RUN = 15
 TRIAL_MAX_STEPS = 100
 TRIAL_EVAL_STEPS = 25
 TESTING_TRIAL_MAX_STEPS = 50
