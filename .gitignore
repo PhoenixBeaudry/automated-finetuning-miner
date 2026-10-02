@@ -1,0 +1,38 @@
+# Runtime secrets and local credential stores
+.env
+.env.*
+!.env.example
+**/.aws/
+**/.ssh/
+**/.netrc
+**/.git-credentials
+*.pem
+*.key
+credentials
+credentials.*
+secrets/
+secrets.*
+
+# Generated task configurations can contain credentials
+/configs/*.yml
+/configs/*.yaml
+!/configs/base.yml
+!/configs/base_testing.yml
+/configs/rewards_*.py
+
+# Local runtimes, caches, datasets, and experiment artifacts
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.cache/
+*.log
+hpo_runs/
+wandb/
+mlruns/
+training_output/
+outputs/
+data/
+input_data/
+.DS_Store

@@ -1,0 +1,42 @@
+# Git history and local tool metadata must not enter build context
+.git
+.codex
+.agents
+
+# Runtime secrets and local credential stores
+**/.env
+**/.env.*
+**/.aws
+**/.ssh
+**/.netrc
+**/.git-credentials
+**/*.pem
+**/*.key
+**/credentials
+**/credentials.*
+**/secrets
+**/secrets.*
+
+# Copy only the checked-in configuration templates and handler
+configs/*.yml
+configs/*.yaml
+!configs/base.yml
+!configs/base_testing.yml
+configs/rewards_*.py
+
+# Local runtimes, caches, datasets, and experiment artifacts
+**/.venv
+**/venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.cache
+**/*.log
+**/hpo_runs
+**/wandb
+**/mlruns
+**/training_output
+**/outputs
+**/data
+**/input_data
+**/.DS_Store
